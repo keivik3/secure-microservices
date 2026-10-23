@@ -82,9 +82,21 @@ services:
     networks:
       - grpc-network
 
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./services/notification_service/Dockerfile
+    depends_on:
+      - rabbitmq
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: app
+      RABBITMQ_PASS: app_secret
+    networks:
+      - grpc-network
+
   # auth-service:        gRPC :8081  — Keycloak (python-keycloak)
   # user-service:        gRPC :50053 — пользователи
-  # notification-service: consumer очереди RabbitMQ
   # central-grpc-server: gRPC :50051 — агрегатор, rate limiter, метрики :8010
   # api-gateway:         REST :8000  — FastAPI, санитизация ввода
 
