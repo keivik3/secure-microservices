@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package gateway;
+
+import "proto/repair/repair.proto";
+
+// Контракт центрального gRPC-сервера (агрегатора).
+// Объединяет пользовательские методы (как в Go-версии)
+// и методы заявок на ремонт, которые проксируются в RepairService.
+
+message User {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message CreateUserResponse {
+  int64 id = 1;
+  string accessToken = 2;
+  int64 expiresIn = 3;
+}
+
+message UserLoginRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message UserLoginResponse {
+  string accessToken = 1;
+  int64 expiresIn = 2;
+  string refreshToken = 3;
+}
+
+message TokenRequest {
+  string accessToken = 1;
+}
+
+message RoleResponse {
+  string role = 1;
+}
+
+message RefreshGrpcTokenRequest {
+  string refreshToken = 1;
+}
+
+message RefreshGrpcTokenResponse {
+  string accessToken = 1;
+  string refreshToken = 2;
+  int64 expiresIn = 3;
+}
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc LoginUser(UserLoginRequest) returns (UserLoginResponse);
+  rpc ValidateUser(TokenRequest) returns (RoleResponse);
+  rpc RefreshGrpcToken(RefreshGrpcTokenRequest) returns (RefreshGrpcTokenResponse);
+}
+
+// Прокси к RepairService: центральный сервер принимает эти вызовы
+// от API Gateway и пересылает их в repair-service.
+service RepairGatewayService {
+  rpc CreateTicket(repair.CreateTicketRequest) returns (repair.TicketResponse);
+  rpc GetTicket(repair.GetTicketRequest) returns (repair.TicketResponse);
+  rpc ListTickets(repair.ListTicketsRequest) returns (repair.ListTicketsResponse);
+  rpc UpdateTicketStatus(repair.UpdateTicketStatusRequest) returns (repair.TicketResponse);
+  rpc AssignTicket(repair.AssignTicketRequest) returns (repair.TicketResponse);
+  rpc DeleteTicket(repair.DeleteTicketRequest) returns (repair.DeleteTicketResponse);
+}

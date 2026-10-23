@@ -1,119 +1,56 @@
-# 🔐 secure-microservices-demo
-Secure application based on microservice architecture
+# Rail Repair gRPC — заявки на ремонт железной дороги
 
-<!-- Блок переключения языков -->
-<div align="center">
+Безопасное прикладное приложение в микросервисной архитектуре (Python, gRPC).
+Порт Go-проекта grpc-vtb с добавлением бизнес-домена «заявки на ремонт ЖД»,
+базы данных, кэша и брокера сообщений.
 
-[Русский](#-на-русском) | [English](#-english)
+## Архитектура
 
-</div>
-
----
-
-## 🇷🇺 
-
-### 📋 Описание проекта
-Данный проект выполнен в рамках курсового проекта по информационной безопасности. Цель работы — спроектировать и реализовать рабочее безопасное приложение с использованием микросервисной архитектуры.
-
-### 🧱 Архитектура проекта
-| Компонент             | Назначение                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| Keycloak              | Сервер для централизованной аутентификации и авторизации пользователей    |
-| Auth Service          | Собственный микросервис для обработки токенов и интеграции с Keycloak     |
-| User Service          | Микросервис для управления профильными данными пользователей              |
-| Central gRPC Server   | Центральный координирующий сервис для обработки запросов внутренних сервисов |
-| API Gateway           | Единая точка входа для внешних клиентов, трансляция HTTP в gRPC           |
-| Prometheus            | Сбор метрик и мониторинг работоспособности всех компонентов системы        |
-| PostgreSQL            | Реляционная база данных для постоянного хранения данных                    |
-| Redis                 | Кэширование часто запрашиваемых данных для ускорения ответов              |
-| RabbitMQ/Kafka        | Брокер сообщений для асинхронного взаимодействия между сервисами          |
-
-### 🚀 Быстрый старт
-
-#### Предварительные требования
-- Установленные Docker и Docker Compose на вашем устройстве
-
-#### Шаги для запуска
-1. Клонируйте репозиторий:
-```bash
-git clone https://github.com/keivik/secure-microservices.git 
-cd secure-microservices
+```
+Клиент (curl / REST)
+   │  HTTP/JSON :8000
+   ▼
+API Gateway (FastAPI) — санитизация ввода (XSS/SQLi)
+   │  gRPC + TLS :50051
+   ▼
+Central gRPC Server — агрегатор, rate limiter (5 rps), Prometheus :8010
+   ├── gRPC + TLS :50053 ─► User Service ──► Auth Service :8081 ──► Keycloak :8080
+   └── gRPC + TLS :50054 ─► Repair Service ─┬─► PostgreSQL (заявки)
+                                            ├─► Redis (кэш ticket:{id}, TTL 5 мин)
+                                            └─► RabbitMQ (события repair.*)
+                                                         │
+                                                         ▼
+                                            Notification Service (консьюмер)
 ```
 
-Запустите все сервисы через Docker Compose:
-```bash
-docker compose up --build
+## Домен: заявка на ремонт (RepairTicket)
+
+Поля: id, track_section (участок пути), defect_type (рельс/шпалы/стрелка/контактная
+сеть/СЦБ/переезд), description, priority (LOW..CRITICAL),
+status (NEW → ASSIGNED → IN_PROGRESS → DONE / REJECTED / CANCELLED),
+reporter, crew (бригада), planned_date, created_at, updated_at, comment.
+
+## События брокера (RabbitMQ, exchange repair.events, topic)
+
+- `repair.created` — создана заявка (CRITICAL — срочное уведомление диспетчеру)
+- `repair.assigned` — назначена бригада
+- `repair.status_changed` — смена статуса
+
+## Роли (Keycloak)
+
+`inspector` — создаёт заявки, `dispatcher` — назначает бригады и меняет статусы,
+`crew` — выполняет работы, `admin` — всё + удаление.
+
+## Структура каталогов
+
 ```
-После запуска доступны следующие интерфейсы:
-| Сервис | Локальный адрес | |--------------|---------------------------| | API Gateway | http://localhost:8000 | | Keycloak Admin | http://localhost:8080 | | Prometheus | http://localhost:9091 |
-
-### 🛡️ Безопасность в проекте
-
-#### Реализованы следующие практики безопасной разработки для микросервисов:
-
-* Централизованная аутентификация через OpenID Connect
-* Аутентификация сервисов друг друга через mTLS
-* Хранение чувствительных данных в переменных окружения
-* Использование SSL/TLS для всех внутренних и внешних соединений
-* Сбор и мониторинг метрик безопасности
-### 📄 Лицензия
-Данный проект распространяется под лицензией MIT — вы можете свободно использовать его для учебных и коммерческих целей.
-
---- 
-
-</div>
-
---- 
-
-## ENG 
-### 📋 Project Description
-This project is developed as a course project for information security program. The main goal is to design and implement a working secure application based on microservice architecture.
-
-### 🧱 Project Architecture
-| Component             | 	Purpose                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| Keycloak              | Central authentication and authorization server for users    |
-| Auth Service          | Custom microservice for token processing and Keycloak integration     |
-| User Service          | Microservice for managing user profile data           |
-| Central gRPC Server   | Central coordinating service for processing requests from internal services |
-| API Gateway           | 	Single entry point for external clients, translates HTTP to gRPC       |
-| Prometheus            | Metrics collection and health monitoring for all system components       |
-| PostgreSQL            | Relational database for persistent data storage                    |
-| Redis                 | 	Caching of frequently requested data to speed up responses             |
-| RabbitMQ/Kafka        | Message broker for asynchronous inter-service communication      |
-
-### 🚀 Quick Start
-
-#### Prerequisites
-* Docker and Docker Compose installed on your machine
-
-#### Steps to run
-1. Clone the repository:
-``` bash
-git clone https://github.com/keivik3/secure-microservices.git 
-cd secure-microservices-demo
+proto/                  контракты gRPC (gateway, user, auth, repair)
+services/api_gateway/   REST → gRPC (FastAPI), санитизация ввода
+services/central_server/ агрегатор + rate limiter + метрики
+services/user_service/  пользователи
+services/auth_service/  Keycloak (python-keycloak)
+services/repair_service/ заявки: Postgres + Redis + RabbitMQ
+services/notification_service/ консьюмер событий
+cert/                   генерация CA и mTLS-сертификатов (gen.sh)
+scripts/                генерация pb2-кода, тестовые запросы
 ```
-
-2. Start all services with Docker Compose:
-``` bash
-docker compose up --build
-```
-
-#### After startup, the following interfaces are available:
-| Service | Local address | |---------------|---------------------------| | API Gateway | http://localhost:8000 | | Keycloak Admin | http://localhost:8080 | | Prometheus | http://localhost:9091 |
-
-### 🛡️ Security implementation
-
-#### The following secure development practices for microservices are implemented:
-
-* Centralized authentication via OpenID Connect
-* Service-to-service authentication via mTLS
-* Sensitive data stored in environment variables
-* SSL/TLS encryption for all internal and external connections
-* Security metrics collection and monitoring
-
-### 📄 License
-This project is licensed under the MIT License - you are free to use it for educational and commercial purposes.
-
-
----

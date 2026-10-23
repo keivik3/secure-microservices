@@ -1,0 +1,76 @@
+version: '3.8'
+
+# Каркас docker-compose для Python-версии.
+# Инфраструктура готова; сервисы приложения добавим по мере написания кода.
+
+services:
+
+  # ---------- Инфраструктура ----------
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    networks:
+      - grpc-network
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rail_repair
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - grpc-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - grpc-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: app
+      RABBITMQ_DEFAULT_PASS: app_secret
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # панель управления
+    networks:
+      - grpc-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9091:9090"
+    networks:
+      - grpc-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  # ---------- Сервисы приложения (добавим на следующих шагах) ----------
+  # auth-service:        gRPC :8081  — Keycloak (python-keycloak)
+  # user-service:        gRPC :50053 — пользователи
+  # repair-service:      gRPC :50054 — заявки: Postgres + Redis + RabbitMQ
+  # notification-service: consumer очереди RabbitMQ
+  # central-grpc-server: gRPC :50051 — агрегатор, rate limiter, метрики :8010
+  # api-gateway:         REST :8000  — FastAPI, санитизация ввода
+
+networks:
+  grpc-network:
+    driver: bridge
+
+volumes:
+  pgdata:

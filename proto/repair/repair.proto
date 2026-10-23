@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package repair;
+
+// ---------- Перечисления ----------
+
+enum DefectType {
+  DEFECT_UNSPECIFIED = 0;
+  RAIL = 1;        // дефект рельса
+  SLEEPER = 2;     // шпалы
+  SWITCH = 3;      // стрелочный перевод
+  CATENARY = 4;    // контактная сеть
+  SIGNALING = 5;   // СЦБ (сигнализация, централизация, блокировка)
+  CROSSING = 6;    // железнодорожный переезд
+  OTHER = 7;
+}
+
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  CRITICAL = 4;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  NEW = 1;          // создана, ждёт диспетчера
+  ASSIGNED = 2;     // назначена бригада
+  IN_PROGRESS = 3;  // работы идут
+  DONE = 4;         // выполнена
+  REJECTED = 5;     // отклонена
+  CANCELLED = 6;    // отменена автором
+}
+
+// ---------- Сущность ----------
+
+message RepairTicket {
+  int64 id = 1;
+  string track_section = 2;    // участок пути: "Москва — Тверь, 167 км, путь 2"
+  DefectType defect_type = 3;
+  string description = 4;
+  Priority priority = 5;
+  Status status = 6;
+  string reporter = 7;         // username создателя (из Keycloak)
+  string crew = 8;             // назначенная бригада, напр. "ПЧ-6, бригада №3"
+  string planned_date = 9;     // плановая дата ремонта, ISO 8601
+  int64 created_at = 10;       // unix timestamp
+  int64 updated_at = 11;
+  string comment = 12;         // последний комментарий (причина отклонения и т.п.)
+}
+
+// ---------- Запросы / ответы ----------
+
+message CreateTicketRequest {
+  string track_section = 1;
+  DefectType defect_type = 2;
+  string description = 3;
+  Priority priority = 4;
+  string reporter = 5;         // заполняет gateway из токена
+}
+
+message GetTicketRequest {
+  int64 id = 1;
+}
+
+message ListTicketsRequest {
+  Status status = 1;           // 0 = без фильтра
+  Priority priority = 2;       // 0 = без фильтра
+  string track_section = 3;    // "" = без фильтра (подстрока)
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message UpdateTicketStatusRequest {
+  int64 id = 1;
+  Status status = 2;
+  string comment = 3;
+}
+
+message AssignTicketRequest {
+  int64 id = 1;
+  string crew = 2;
+  string planned_date = 3;
+}
+
+message DeleteTicketRequest {
+  int64 id = 1;
+}
+
+message TicketResponse {
+  RepairTicket ticket = 1;
+}
+
+message ListTicketsResponse {
+  repeated RepairTicket tickets = 1;
+  int64 total = 2;
+}
+
+message DeleteTicketResponse {
+  bool success = 1;
+}
+
+// ---------- Сервис ----------
+
+service RepairService {
+  rpc CreateTicket(CreateTicketRequest) returns (TicketResponse);
+  rpc GetTicket(GetTicketRequest) returns (TicketResponse);
+  rpc ListTickets(ListTicketsRequest) returns (ListTicketsResponse);
+  rpc UpdateTicketStatus(UpdateTicketStatusRequest) returns (TicketResponse);
+  rpc AssignTicket(AssignTicketRequest) returns (TicketResponse);
+  rpc DeleteTicket(DeleteTicketRequest) returns (DeleteTicketResponse);
+}
