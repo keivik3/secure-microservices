@@ -60,10 +60,30 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
-  # ---------- Сервисы приложения (добавим на следующих шагах) ----------
+  # ---------- Сервисы приложения ----------
+
+  repair-service:
+    build:
+      context: .
+      dockerfile: ./services/repair_service/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: app
+      RABBITMQ_PASS: app_secret
+      TLS_ENABLED: "false"  # включим, когда сгенерируем сертификаты (cert/gen.sh)
+    ports:
+      - "50054:50054"
+    networks:
+      - grpc-network
+
   # auth-service:        gRPC :8081  — Keycloak (python-keycloak)
   # user-service:        gRPC :50053 — пользователи
-  # repair-service:      gRPC :50054 — заявки: Postgres + Redis + RabbitMQ
   # notification-service: consumer очереди RabbitMQ
   # central-grpc-server: gRPC :50051 — агрегатор, rate limiter, метрики :8010
   # api-gateway:         REST :8000  — FastAPI, санитизация ввода
