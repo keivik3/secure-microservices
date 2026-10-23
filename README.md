@@ -4,7 +4,7 @@ Secure application based on microservice architecture
 <!-- Блок переключения языков -->
 <div align="center">
 
-[🇷🇺 Русский](#-на-русском) | [🇬🇧 English](#-english)
+[Русский](#-на-русском) | [English](#-english)
 
 </div>
 
@@ -61,7 +61,11 @@ docker compose up --build
 
 --- 
 
-## 🇬🇧 ENG 
+</div>
+
+--- 
+
+## ENG 
 ### 📋 Project Description
 This project is developed as a course project for information security program. The main goal is to design and implement a working secure application based on microservice architecture.
 
