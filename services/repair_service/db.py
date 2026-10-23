@@ -18,18 +18,33 @@ _pool: ThreadedConnectionPool | None = None
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 
 
-def init_db() -> None:
-    """Создаёт пул соединений и применяет schema.sql (идемпотентно)."""
+def init_db(retries: int = 10, delay: int = 3) -> None:
+    """Создаёт пул соединений и применяет schema.sql (идемпотентно).
+
+    Retry-цикл: в docker-compose БД стартует дольше сервиса, поэтому
+    ждём её с повторными попытками, а не падаем сразу (отказоустойчивость).
+    """
     global _pool
-    _pool = ThreadedConnectionPool(
-        minconn=1,
-        maxconn=10,
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "rail_repair"),
-        user=os.getenv("POSTGRES_USER", "app"),
-        password=os.getenv("POSTGRES_PASSWORD", "app_secret"),
-    )
+    import logging
+    log = logging.getLogger("repair.db")
+    for attempt in range(1, retries + 1):
+        try:
+            _pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=10,
+                host=os.getenv("POSTGRES_HOST", "localhost"),
+                port=int(os.getenv("POSTGRES_PORT", "5432")),
+                dbname=os.getenv("POSTGRES_DB", "rail_repair"),
+                user=os.getenv("POSTGRES_USER", "app"),
+                password=os.getenv("POSTGRES_PASSWORD", "app_secret"),
+                connect_timeout=3,
+            )
+            break
+        except psycopg2.OperationalError as e:
+            log.warning("PostgreSQL недоступен (попытка %d/%d): %s", attempt, retries, e)
+            if attempt == retries:
+                raise
+            time.sleep(delay)
     with open(SCHEMA_PATH, encoding="utf-8") as f:
         schema = f.read()
     conn = _pool.getconn()

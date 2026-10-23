@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Метрики центрального gRPC-сервера (появится на шаге central-server, порт 8010)
+  # - job_name: 'central-grpc-server'
+  #   scheme: https
+  #   tls_config:
+  #     insecure_skip_verify: true
+  #   static_configs:
+  #     - targets: ['central-grpc-server:8010']

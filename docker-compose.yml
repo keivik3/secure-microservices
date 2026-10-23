@@ -1,11 +1,17 @@
 version: '3.8'
 
-# Каркас docker-compose для Python-версии.
-# Инфраструктура готова; сервисы приложения добавим по мере написания кода.
+# Rail Repair gRPC — заявки на ремонт железной дороги.
+#
+# ДЗ 4: сегментация сетей. Три изолированных сегмента вместо одной плоской сети:
+#   frontend-net — снаружи доступен только api-gateway (REST :8000)
+#   app-net      — gRPC-сервисы общаются между собой
+#   data-net     — только "своим": БД, кэш, брокер недоступны из frontend/app
+# Сервис, подключённый к нескольким сетям, — маршрутизатор между сегментами.
+# Проверка сегментации: scripts/check_network.sh
 
 services:
 
-  # ---------- Инфраструктура ----------
+  # ==================== Инфраструктура ====================
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -15,8 +21,9 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
     ports:
       - "8080:8080"
+    restart: unless-stopped            # ДЗ 5: автоперезапуск при падении
     networks:
-      - grpc-network
+      - app-net
 
   postgres:
     image: postgres:16-alpine
@@ -24,19 +31,28 @@ services:
       POSTGRES_DB: rail_repair
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app_secret
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups             # ДЗ 5: сюда складываются дампы (scripts/backup.sh)
+    restart: unless-stopped
+    healthcheck:                       # ДЗ 5: healthcheck — compose знает, когда БД готова
+      test: ["CMD-SHELL", "pg_isready -U app -d rail_repair"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks:
-      - grpc-network
+      - data-net                       # ТОЛЬКО data-net: из app-net/frontend-net БД недоступна
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks:
-      - grpc-network
+      - data-net
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -44,10 +60,15 @@ services:
       RABBITMQ_DEFAULT_USER: app
       RABBITMQ_DEFAULT_PASS: app_secret
     ports:
-      - "5672:5672"    # AMQP
-      - "15672:15672"  # панель управления
+      - "15672:15672"  # панель управления (для демонстрации событий на защите)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     networks:
-      - grpc-network
+      - data-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -55,53 +76,66 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9091:9090"
+    restart: unless-stopped
     networks:
-      - grpc-network
+      - app-net
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
-  # ---------- Сервисы приложения ----------
+  # ==================== Сервисы приложения ====================
 
   repair-service:
     build:
       context: .
       dockerfile: ./services/repair_service/Dockerfile
     depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_healthy     # ДЗ 5: стартуем только когда БД реально готова
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
       RABBITMQ_PASS: app_secret
-      TLS_ENABLED: "false"  # включим, когда сгенерируем сертификаты (cert/gen.sh)
+      TLS_ENABLED: "false"  # включим после генерации сертификатов (cert/gen.sh)
     ports:
       - "50054:50054"
+    restart: unless-stopped
     networks:
-      - grpc-network
+      - app-net                        # принимает gRPC-вызовы от central-server
+      - data-net                       # ходит в postgres/redis/rabbitmq
 
   notification-service:
     build:
       context: .
       dockerfile: ./services/notification_service/Dockerfile
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
       RABBITMQ_PASS: app_secret
+    restart: unless-stopped
     networks:
-      - grpc-network
+      - data-net                       # нужен ТОЛЬКО брокер; в app-net его не пускаем
 
-  # auth-service:        gRPC :8081  — Keycloak (python-keycloak)
-  # user-service:        gRPC :50053 — пользователи
-  # central-grpc-server: gRPC :50051 — агрегатор, rate limiter, метрики :8010
-  # api-gateway:         REST :8000  — FastAPI, санитизация ввода
+  # auth-service:        gRPC :8081  (app-net) — Keycloak (python-keycloak)
+  # user-service:        gRPC :50053 (app-net) — пользователи
+  # central-grpc-server: gRPC :50051 (app-net) — агрегатор, rate limiter, метрики :8010
+  # api-gateway:         REST :8000  (frontend-net + app-net) — FastAPI, санитизация ввода
 
+# ДЗ 4: три изолированных сегмента
 networks:
-  grpc-network:
+  frontend-net:
+    driver: bridge
+  app-net:
+    driver: bridge
+  data-net:
     driver: bridge
 
 volumes:
