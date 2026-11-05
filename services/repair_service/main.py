@@ -23,8 +23,9 @@ sys.path.insert(0, os.getenv("GEN_PATH", os.path.join(BASE_DIR, "..", "..", "gen
 import cache
 import db
 import events
+from grpc_reflection.v1alpha import reflection
 from handler import RepairService
-from proto.repair import repair_pb2_grpc
+from proto.repair import repair_pb2, repair_pb2_grpc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +67,16 @@ def serve() -> None:
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     repair_pb2_grpc.add_RepairServiceServicer_to_server(RepairService(), server)
+
+    # Server Reflection: позволяет grpcurl и отладчикам узнавать контракт
+    # у самого сервера, без локальных .proto-файлов (как в Go-версии).
+    reflection.enable_server_reflection(
+        (
+            repair_pb2.DESCRIPTOR.services_by_name["RepairService"].full_name,
+            reflection.SERVICE_NAME,
+        ),
+        server,
+    )
 
     if TLS_ENABLED:
         server.add_secure_port(f"[::]:{PORT}", make_server_credentials())
