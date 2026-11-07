@@ -11,11 +11,17 @@
 #   python-образы (repair, notification) — TCP-connect через python;
 #   alpine-образы (postgres и др.) — ping.
 
+set -e
+cd "$(dirname "$0")/.."
+
+. scripts/lib/runtime.sh
+
 pass=0; fail=0
 
 check() {  # $1=ожидание(ok/deny) $2=откуда(сервис) $3=куда $4=порт $5=пояснение
-    if docker compose exec -T "$2" sh -c \
-        "python -c \"import socket,sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 2)\" $3 $4 2>/dev/null || ping -c1 -W2 $3 >/dev/null 2>&1"
+    if compose exec -T "$2" sh -c \
+        "python -c \"import socket,sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 2)\" $3 $4 2>/dev/null || ping -c1 -W2 $3 >/dev/null 2>&1" \
+        2>/dev/null
     then
         result="OK (доступен)"; actual=ok
     else

@@ -1,0 +1,14 @@
+name: Docker demo
+on: [pull_request]
+permissions: {contents: read}
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: |
+          sh scripts/init_env.sh
+          docker compose config --quiet
+          sh scripts/demo.sh docker

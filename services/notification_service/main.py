@@ -69,7 +69,7 @@ def on_message(channel, method, properties, body: bytes) -> None:
 def run() -> None:
     credentials = pika.PlainCredentials(
         os.getenv("RABBITMQ_USER", "app"),
-        os.getenv("RABBITMQ_PASS", "app_secret"),
+        os.environ["RABBITMQ_PASS"],
     )
     params = pika.ConnectionParameters(
         host=os.getenv("RABBITMQ_HOST", "localhost"),

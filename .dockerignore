@@ -1,0 +1,7 @@
+*
+!services/
+!services/**
+!gen/
+!gen/**
+!cert/
+!cert/**
