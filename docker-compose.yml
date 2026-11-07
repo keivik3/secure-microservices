@@ -7,6 +7,38 @@
 # Сервис, подключённый к нескольким сетям, — маршрутизатор между сегментами.
 # Проверка сегментации: scripts/check_network.sh
 
+x-postgres-ha: &postgres-ha
+  image: docker.io/library/postgres:16-alpine
+  profiles: ["ha-demo"]
+  tmpfs:
+    - /var/lib/postgresql/data
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U app -d rail_repair"]
+    interval: 2s
+    timeout: 2s
+    retries: 30
+  restart: "no"
+  networks:
+    - data-net
+
+x-rabbitmq-ha: &rabbitmq-ha
+  image: docker.io/library/rabbitmq:3-management-alpine
+  profiles: ["ha-demo"]
+  entrypoint: ["/bin/sh", "/rabbitmq-entrypoint.sh"]
+  environment: &rabbitmq-ha-environment
+    HOME: /tmp/rabbitmq
+    RABBITMQ_DEFAULT_USER: app
+    RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
+    RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?Run sh scripts/init_env.sh}
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+    interval: 3s
+    timeout: 10s
+    retries: 30
+  restart: "no"
+  networks:
+    - data-net
+
 services:
 
   # ==================== Инфраструктура ====================
@@ -16,19 +48,19 @@ services:
     command: start-dev
     environment:
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run sh scripts/init_env.sh}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     restart: unless-stopped            # ДЗ 5: автоперезапуск при падении
     networks:
       - app-net
 
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     environment:
       POSTGRES_DB: rail_repair
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: app_secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run sh scripts/init_env.sh}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backups:/backups             # ДЗ 5: сюда складываются дампы (scripts/backup.sh)
@@ -42,7 +74,7 @@ services:
       - data-net                       # ТОЛЬКО data-net: из app-net/frontend-net БД недоступна
 
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -53,15 +85,15 @@ services:
       - data-net
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: docker.io/library/rabbitmq:3-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: app
-      RABBITMQ_DEFAULT_PASS: app_secret
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
     ports:
-      - "15672:15672"  # панель управления (для демонстрации событий на защите)
+      - "127.0.0.1:15672:15672"  # панель управления (для демонстрации событий на защите)
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -69,11 +101,11 @@ services:
       - data-net
 
   prometheus:
-    image: prom/prometheus:latest
+    image: docker.io/prom/prometheus:latest
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     restart: unless-stopped
     networks:
       - app-net
@@ -95,14 +127,20 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run sh scripts/init_env.sh}
       REDIS_HOST: redis
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
-      RABBITMQ_PASS: app_secret
+      RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
       TLS_ENABLED: "false"  # включим после генерации сертификатов (cert/gen.sh)
     ports:
-      - "50054:50054"
+      - "127.0.0.1:50054:50054"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 50054), 2); s.close()"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
     networks:
       - app-net                        # принимает gRPC-вызовы от central-server
       - data-net                       # ходит в postgres/redis/rabbitmq
@@ -117,10 +155,92 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
-      RABBITMQ_PASS: app_secret
+      RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
     restart: unless-stopped
     networks:
       - data-net                       # нужен ТОЛЬКО брокер; в app-net его не пускаем
+
+  postgres-ha-master:
+    <<: *postgres-ha
+    environment:
+      POSTGRES_DB: rail_repair
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run sh scripts/init_env.sh}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:?Run sh scripts/init_env.sh}
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "max_slot_wal_keep_size=64MB"]
+    volumes:
+      - ./infrastructure/postgres/primary-init.sh:/docker-entrypoint-initdb.d/00-replication.sh:ro
+      - ./services/repair_service/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+
+  postgres-ha-standby:
+    <<: *postgres-ha
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: ${POSTGRES_REPLICATION_PASSWORD:?Run sh scripts/init_env.sh}
+    entrypoint: ["/bin/sh", "/standby-entrypoint.sh"]
+    volumes:
+      - ./infrastructure/postgres/standby-entrypoint.sh:/standby-entrypoint.sh:ro
+    depends_on:
+      postgres-ha-master:
+        condition: service_healthy
+
+  rabbitmq-ha-master:
+    <<: *rabbitmq-ha
+    hostname: rabbitmq-ha-master
+    environment:
+      <<: *rabbitmq-ha-environment
+      RABBITMQ_NODENAME: rabbit@rabbitmq-ha-master
+    volumes:
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infrastructure/rabbitmq/entrypoint.sh:/rabbitmq-entrypoint.sh:ro
+      - type: volume
+        source: rabbitmq-ha-master-data
+        target: /var/lib/rabbitmq
+        volume:
+          nocopy: true
+
+  rabbitmq-ha-standby-1:
+    <<: *rabbitmq-ha
+    hostname: rabbitmq-ha-standby-1
+    environment:
+      <<: *rabbitmq-ha-environment
+      RABBITMQ_NODENAME: rabbit@rabbitmq-ha-standby-1
+    volumes:
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infrastructure/rabbitmq/entrypoint.sh:/rabbitmq-entrypoint.sh:ro
+      - type: volume
+        source: rabbitmq-ha-standby-1-data
+        target: /var/lib/rabbitmq
+        volume:
+          nocopy: true
+
+  rabbitmq-ha-standby-2:
+    <<: *rabbitmq-ha
+    hostname: rabbitmq-ha-standby-2
+    environment:
+      <<: *rabbitmq-ha-environment
+      RABBITMQ_NODENAME: rabbit@rabbitmq-ha-standby-2
+    volumes:
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infrastructure/rabbitmq/entrypoint.sh:/rabbitmq-entrypoint.sh:ro
+      - type: volume
+        source: rabbitmq-ha-standby-2-data
+        target: /var/lib/rabbitmq
+        volume:
+          nocopy: true
+
+  ha-client:
+    build:
+      context: .
+      dockerfile: ./services/repair_service/Dockerfile
+    profiles: ["ha-demo"]
+    entrypoint: ["sh", "-c", "sleep infinity"]
+    environment:
+      RABBITMQ_USER: app
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
+    restart: "no"
+    networks:
+      - data-net
 
   # auth-service:        gRPC :8081  (app-net) — Keycloak (python-keycloak)
   # user-service:        gRPC :50053 (app-net) — пользователи
@@ -138,3 +258,6 @@ networks:
 
 volumes:
   pgdata:
+  rabbitmq-ha-master-data:
+  rabbitmq-ha-standby-1-data:
+  rabbitmq-ha-standby-2-data:

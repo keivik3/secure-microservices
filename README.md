@@ -53,6 +53,23 @@ cert/                   генерация CA и mTLS-сертификатов (
 scripts/                генерация pb2-кода, тестовые запросы
 ```
 
+# Полная демонстрация
+
+```sh
+sh scripts/init_env.sh
+sh scripts/demo.sh docker
+sh scripts/demo.sh podman
+```
+
+Проверяются CRUD, SQL-схема, Redis, RabbitMQ, сети, backup/restore и failover.
+
+Без сборки:
+
+```sh
+SKIP_BUILD=1 sh scripts/demo.sh docker
+SKIP_BUILD=1 sh scripts/demo.sh podman
+```
+
 # Тестирование работы программы: 
 
 ## 1. 

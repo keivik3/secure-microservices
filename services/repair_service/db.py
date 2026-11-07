@@ -36,7 +36,7 @@ def init_db(retries: int = 10, delay: int = 3) -> None:
                 port=int(os.getenv("POSTGRES_PORT", "5432")),
                 dbname=os.getenv("POSTGRES_DB", "rail_repair"),
                 user=os.getenv("POSTGRES_USER", "app"),
-                password=os.getenv("POSTGRES_PASSWORD", "app_secret"),
+                password=os.environ["POSTGRES_PASSWORD"],
                 connect_timeout=3,
             )
             break

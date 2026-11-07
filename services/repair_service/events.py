@@ -30,7 +30,7 @@ def _connect() -> None:
     global _connection, _channel
     credentials = pika.PlainCredentials(
         os.getenv("RABBITMQ_USER", "app"),
-        os.getenv("RABBITMQ_PASS", "app_secret"),
+        os.environ["RABBITMQ_PASS"],
     )
     params = pika.ConnectionParameters(
         host=os.getenv("RABBITMQ_HOST", "localhost"),
