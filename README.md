@@ -61,7 +61,12 @@ sh scripts/demo.sh docker
 sh scripts/demo.sh podman
 ```
 
-Проверяются CRUD, SQL-схема, Redis, RabbitMQ, сети, backup/restore и failover.
+Проверяются REST API Gateway, валидация ввода, CRUD, SQL-схема, Redis,
+RabbitMQ, сети, backup/restore и failover.
+
+После запуска <http://127.0.0.1:8000/> открывает Swagger UI.
+Если порт `8000` занят, остановите стенд другого движка: `podman compose down` или
+`docker compose down`.
 
 Без сборки:
 
@@ -132,7 +137,7 @@ docker compose exec redis redis-cli GET ticket:1
 sh scripts/check_network.sh
 ```
 
-Ожидаемый результат — 7 passed, 0 failed: первые четыре строки OK (доступен), последние три — ЗАПРЕЩЁН, и все со статусом PASS. 
+Ожидаемый результат — 10 passed, 0 failed: пять разрешённых и пять запрещённых соединений.
 
 ## ДЗ 5 — важный нюанс с вашей ситуацией
 ```

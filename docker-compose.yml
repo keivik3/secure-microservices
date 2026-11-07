@@ -160,6 +160,27 @@ services:
     networks:
       - data-net                       # нужен ТОЛЬКО брокер; в app-net его не пускаем
 
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api_gateway/Dockerfile
+    depends_on:
+      repair-service:
+        condition: service_healthy
+    environment:
+      REPAIR_SERVICE_URL: repair-service:50054
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - frontend-net
+      - app-net
+
   postgres-ha-master:
     <<: *postgres-ha
     environment:
@@ -245,7 +266,6 @@ services:
   # auth-service:        gRPC :8081  (app-net) — Keycloak (python-keycloak)
   # user-service:        gRPC :50053 (app-net) — пользователи
   # central-grpc-server: gRPC :50051 (app-net) — агрегатор, rate limiter, метрики :8010
-  # api-gateway:         REST :8000  (frontend-net + app-net) — FastAPI, санитизация ввода
 
 # ДЗ 4: три изолированных сегмента
 networks:
