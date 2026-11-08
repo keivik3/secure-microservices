@@ -13,6 +13,15 @@ grpc() {
         -plaintext "$@"
 }
 
+gateway() {
+    compose exec -T api-gateway python -c '
+import sys
+import urllib.request
+response = urllib.request.urlopen("http://127.0.0.1:8000" + sys.argv[1], timeout=7)
+print(f"{response.status}|{response.read().decode()}")
+' "$1"
+}
+
 cleanup() {
     if [ -n "$ticket_id" ]; then
         grpc -d "{\"id\":$ticket_id}" repair-service:50054 repair.RepairService/DeleteTicket >/dev/null 2>&1 || true
@@ -96,7 +105,14 @@ done
 printf '%s\n' "$logs" | grep "заявка №$ticket_id" | tail -n 4
 pass "RabbitMQ доставил событие consumer-сервису"
 
-echo "=== 8. DeleteTicket ==="
+echo "=== 8. REST API Gateway ==="
+gateway_ticket="$(gateway "/api/tickets/$ticket_id")"
+printf '%s\n' "$gateway_ticket"
+printf '%s\n' "$gateway_ticket" | grep -q "^200|.*\"id\":\"$ticket_id\"" || \
+    fail "API Gateway не получил заявку через gRPC"
+pass "REST -> gRPC работает"
+
+echo "=== 9. DeleteTicket ==="
 grpc -d "{\"id\":$ticket_id}" repair-service:50054 repair.RepairService/DeleteTicket >/dev/null
 db_count="$(compose exec -T postgres psql -U app -d rail_repair -Atqc "SELECT COUNT(*) FROM tickets WHERE id = $ticket_id")"
 [ "$db_count" = "0" ] || fail "DELETE не удалил заявку из PostgreSQL"

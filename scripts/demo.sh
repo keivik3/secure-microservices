@@ -43,6 +43,22 @@ wait_repair_service() {
     return 1
 }
 
+wait_api_gateway() {
+    attempt=1
+    while [ "$attempt" -le 60 ]; do
+        if compose exec -T api-gateway python -c \
+            'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=2)' \
+            >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    compose logs api-gateway >&2 || true
+    echo "[FAIL] API Gateway не готов" >&2
+    return 1
+}
+
 echo "=== 1/7. Сборка и запуск ==="
 sync_existing_postgres_password
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
@@ -51,6 +67,7 @@ else
     compose up --build -d
 fi
 wait_repair_service
+wait_api_gateway
 compose ps
 
 echo "=== 2/7. Продуктовый сценарий и SQL-схема ==="
@@ -69,7 +86,7 @@ echo "=== 6/7. Failover PostgreSQL и RabbitMQ ==="
 sh scripts/demo_ha.sh
 
 echo "=== 7/7. Итог ==="
-echo "[PASS] gRPC и продуктовый CRUD"
+echo "[PASS] REST API Gateway, gRPC и продуктовый CRUD"
 echo "[PASS] SQL-файл и применённая схема PostgreSQL"
 echo "[PASS] PostgreSQL, Redis и RabbitMQ"
 echo "[PASS] разрешённые, запрещённые связи и контролируемый сетевой отказ"
