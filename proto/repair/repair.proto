@@ -42,7 +42,7 @@ message RepairTicket {
   string description = 4;
   Priority priority = 5;
   Status status = 6;
-  string reporter = 7;         // username создателя (из Keycloak)
+  string reporter = 7;         // идентификатор автора заявки
   string crew = 8;             // назначенная бригада, напр. "ПЧ-6, бригада №3"
   string planned_date = 9;     // плановая дата ремонта, ISO 8601
   int64 created_at = 10;       // unix timestamp
@@ -57,7 +57,7 @@ message CreateTicketRequest {
   DefectType defect_type = 2;
   string description = 3;
   Priority priority = 4;
-  string reporter = 5;         // заполняет gateway из токена
+  string reporter = 5;         // идентификатор автора заявки
 }
 
 message GetTicketRequest {

@@ -1,7 +1,6 @@
 #!/bin/sh
 # Генерация своего CA и сертификатов для mTLS между сервисами.
-# Порт cert/gen.sh из Go-версии. Перед запуском положите рядом
-# opensslCA.cnf, opensslServer.cnf, server-ext.cnf, client-ext.cnf.
+# Требуются opensslCA.cnf, opensslServer.cnf, server-ext.cnf, client-ext.cnf.
 
 rm -f *.pem
 

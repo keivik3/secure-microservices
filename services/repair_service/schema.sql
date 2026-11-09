@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     description   TEXT        NOT NULL,
     priority      TEXT        NOT NULL,            -- LOW | MEDIUM | HIGH | CRITICAL
     status        TEXT        NOT NULL DEFAULT 'NEW', -- NEW | ASSIGNED | IN_PROGRESS | DONE | REJECTED | CANCELLED
-    reporter      TEXT        NOT NULL,            -- username создателя (из Keycloak)
+    reporter      TEXT        NOT NULL,            -- идентификатор автора заявки
     crew          TEXT        NOT NULL DEFAULT '', -- назначенная бригада
     planned_date  TEXT        NOT NULL DEFAULT '', -- плановая дата ремонта, ISO 8601
     comment       TEXT        NOT NULL DEFAULT '', -- последний комментарий

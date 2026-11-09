@@ -11,4 +11,8 @@ jobs:
       - run: |
           sh scripts/init_env.sh
           docker compose config --quiet
+          python -m pip install --disable-pip-version-check pip-audit
+          pip-audit -r services/api_gateway/requirements.txt
+          pip-audit -r services/repair_service/requirements.txt
+          pip-audit -r services/notification_service/requirements.txt
           sh scripts/demo.sh docker

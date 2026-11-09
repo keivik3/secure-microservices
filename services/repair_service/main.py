@@ -38,6 +38,7 @@ TLS_ENABLED = os.getenv("TLS_ENABLED", "true").lower() == "true"
 TLS_CERT_FILE = os.getenv("TLS_CERT_FILE", os.path.join(BASE_DIR, "cert", "server-cert.pem"))
 TLS_KEY_FILE = os.getenv("TLS_KEY_FILE", os.path.join(BASE_DIR, "cert", "server-key.pem"))
 TLS_CA_FILE = os.getenv("TLS_CA_FILE", os.path.join(BASE_DIR, "cert", "ca-cert.pem"))
+ENABLE_GRPC_REFLECTION = os.getenv("ENABLE_GRPC_REFLECTION", "false").lower() == "true"
 
 
 def make_server_credentials() -> grpc.ServerCredentials:
@@ -68,15 +69,14 @@ def serve() -> None:
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     repair_pb2_grpc.add_RepairServiceServicer_to_server(RepairService(), server)
 
-    # Server Reflection: позволяет grpcurl и отладчикам узнавать контракт
-    # у самого сервера, без локальных .proto-файлов (как в Go-версии).
-    reflection.enable_server_reflection(
-        (
-            repair_pb2.DESCRIPTOR.services_by_name["RepairService"].full_name,
-            reflection.SERVICE_NAME,
-        ),
-        server,
-    )
+    if ENABLE_GRPC_REFLECTION:
+        reflection.enable_server_reflection(
+            (
+                repair_pb2.DESCRIPTOR.services_by_name["RepairService"].full_name,
+                reflection.SERVICE_NAME,
+            ),
+            server,
+        )
 
     if TLS_ENABLED:
         server.add_secure_port(f"[::]:{PORT}", make_server_credentials())

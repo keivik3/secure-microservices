@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package auth;
 
-// Порт internal/auth/proto/auth.proto из Go-версии (без изменений контракта)
-
 message UserAuth {
   string username = 1;
   string email = 2;
