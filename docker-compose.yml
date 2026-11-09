@@ -1,9 +1,9 @@
 # Rail Repair gRPC — заявки на ремонт железной дороги.
 #
 # ДЗ 4: сегментация сетей. Три изолированных сегмента вместо одной плоской сети:
-#   frontend-net — снаружи доступен только api-gateway (REST :8000)
+#   frontend-net — frontend передаёт REST-запросы только в api-gateway
 #   app-net      — gRPC-сервисы общаются между собой
-#   data-net     — только "своим": БД, кэш, брокер недоступны из frontend/app
+#   data-net     — хранилища недоступны сервисам из frontend-net и app-net без data-net
 # Сервис, подключённый к нескольким сетям, — маршрутизатор между сегментами.
 # Проверка сегментации: scripts/check_network.sh
 
@@ -114,6 +114,24 @@ services:
 
   # ==================== Сервисы приложения ====================
 
+  frontend:
+    build:
+      context: .
+      dockerfile: ./services/frontend/Dockerfile
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - frontend-net
+
   repair-service:
     build:
       context: .
@@ -132,7 +150,7 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
       RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
-      TLS_ENABLED: "false"  # включим после генерации сертификатов (cert/gen.sh)
+      TLS_ENABLED: "false"  # локальный demo использует plaintext gRPC
     ports:
       - "127.0.0.1:50054:50054"
     restart: unless-stopped
@@ -142,7 +160,7 @@ services:
       timeout: 3s
       retries: 30
     networks:
-      - app-net                        # принимает gRPC-вызовы от central-server
+      - app-net                        # принимает gRPC-вызовы от api-gateway
       - data-net                       # ходит в postgres/redis/rabbitmq
 
   notification-service:
@@ -169,8 +187,8 @@ services:
         condition: service_healthy
     environment:
       REPAIR_SERVICE_URL: repair-service:50054
-    ports:
-      - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
@@ -262,10 +280,6 @@ services:
     restart: "no"
     networks:
       - data-net
-
-  # auth-service:        gRPC :8081  (app-net) — Keycloak (python-keycloak)
-  # user-service:        gRPC :50053 (app-net) — пользователи
-  # central-grpc-server: gRPC :50051 (app-net) — агрегатор, rate limiter, метрики :8010
 
 # ДЗ 4: три изолированных сегмента
 networks:

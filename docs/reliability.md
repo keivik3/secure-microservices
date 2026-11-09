@@ -14,8 +14,8 @@
 
 | Механизм | Где реализовано | Что даёт |
 |---|---|---|
-| `restart: unless-stopped` | все сервисы в docker-compose.yml | контейнер упал → Docker сам поднимет за секунды (MTTR ≤ 1 мин) |
-| healthcheck + `depends_on: service_healthy` | инфраструктура → repair-service → API Gateway | сервис стартует только когда зависимость реально готова, а не просто запущена |
+| `restart: unless-stopped` | основные сервисы стандартного Compose-профиля | контейнерный движок перезапускает сервис после падения (MTTR ≤ 1 мин) |
+| healthcheck + `depends_on: service_healthy` | инфраструктура → repair-service → API Gateway → frontend | сервис стартует только когда зависимость реально готова, а не просто запущена |
 | Retry-подключение к БД (10 попыток × 3 сек) | `repair_service/db.py: init_db()` | не падаем, если БД ещё прогружается |
 | Graceful degradation кэша | `repair_service/cache.py` | Redis недоступен → работаем напрямую через БД, запросы не падают |
 | Graceful degradation брокера | `repair_service/events.py` | RabbitMQ недоступен → запрос успешен, событие теряется, ошибка в лог |
