@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rail Repair</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <div>
+      <p class="eyebrow">Система учёта ремонта</p>
+      <h1>Rail Repair</h1>
+      <p class="subtitle">Заявки на дефекты железнодорожной инфраструктуры</p>
+    </div>
+    <div class="header-actions">
+      <span id="health" class="health">Проверка системы…</span>
+      <a href="/docs" target="_blank" rel="noreferrer">Swagger</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel create-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Новая заявка</p>
+          <h2>Зарегистрировать дефект</h2>
+        </div>
+      </div>
+
+      <form id="create-form" class="form-grid">
+        <label class="wide">Участок пути
+          <input name="track_section" required maxlength="200" placeholder="Москва — Тверь, 167 км, путь 2">
+        </label>
+        <label>Тип дефекта
+          <select name="defect_type" required>
+            <option value="RAIL">Рельс</option>
+            <option value="SLEEPER">Шпалы</option>
+            <option value="SWITCH">Стрелочный перевод</option>
+            <option value="CATENARY">Контактная сеть</option>
+            <option value="SIGNALING">СЦБ</option>
+            <option value="CROSSING">Переезд</option>
+            <option value="OTHER">Другое</option>
+          </select>
+        </label>
+        <label>Приоритет
+          <select name="priority" required>
+            <option value="LOW">Низкий</option>
+            <option value="MEDIUM" selected>Средний</option>
+            <option value="HIGH">Высокий</option>
+            <option value="CRITICAL">Критический</option>
+          </select>
+        </label>
+        <label class="wide">Описание
+          <textarea name="description" required maxlength="2000" rows="3" placeholder="Что обнаружено"></textarea>
+        </label>
+        <label>Автор
+          <input name="reporter" required maxlength="100" value="inspector_demo">
+        </label>
+        <div class="form-action">
+          <button type="submit">Создать заявку</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel tickets-panel">
+      <div class="section-heading tickets-heading">
+        <div>
+          <p class="eyebrow">Работа с заявками</p>
+          <h2>Текущие дефекты <span id="total" class="counter">0</span></h2>
+        </div>
+        <form id="filters" class="filters">
+          <select name="status" aria-label="Фильтр по статусу">
+            <option value="">Все статусы</option>
+            <option value="NEW">Новая</option>
+            <option value="ASSIGNED">Назначена</option>
+            <option value="IN_PROGRESS">В работе</option>
+            <option value="DONE">Выполнена</option>
+            <option value="REJECTED">Отклонена</option>
+            <option value="CANCELLED">Отменена</option>
+          </select>
+          <select name="priority" aria-label="Фильтр по приоритету">
+            <option value="">Все приоритеты</option>
+            <option value="LOW">Низкий</option>
+            <option value="MEDIUM">Средний</option>
+            <option value="HIGH">Высокий</option>
+            <option value="CRITICAL">Критический</option>
+          </select>
+          <button type="submit" class="secondary">Обновить</button>
+        </form>
+      </div>
+
+      <div id="empty" class="empty" hidden>Заявок пока нет. Создайте первую.</div>
+      <div id="tickets" class="tickets" aria-live="polite"></div>
+    </section>
+
+    <section id="actions" class="panel actions-panel" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Выбранная заявка</p>
+          <h2 id="selected-title">Заявка</h2>
+        </div>
+        <button id="delete-button" type="button" class="danger">Удалить</button>
+      </div>
+
+      <div class="action-grid">
+        <form id="assign-form" class="action-card">
+          <h3>Назначить бригаду</h3>
+          <label>Бригада
+            <input name="crew" required maxlength="200" value="ПЧ-6, бригада №3">
+          </label>
+          <label>Плановая дата
+            <input name="planned_date" type="date">
+          </label>
+          <button type="submit">Назначить</button>
+        </form>
+
+        <form id="status-form" class="action-card">
+          <h3>Изменить статус</h3>
+          <label>Новый статус
+            <select id="next-status" name="status" required></select>
+          </label>
+          <label>Комментарий
+            <input name="comment" maxlength="2000" placeholder="Необязательно">
+          </label>
+          <button type="submit">Сохранить статус</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
+

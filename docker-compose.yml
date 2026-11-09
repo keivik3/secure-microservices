@@ -1,7 +1,7 @@
 # Rail Repair gRPC — заявки на ремонт железной дороги.
 #
 # ДЗ 4: сегментация сетей. Три изолированных сегмента вместо одной плоской сети:
-#   frontend-net — снаружи доступен только api-gateway (REST :8000)
+#   frontend-net — frontend передаёт REST-запросы только в api-gateway
 #   app-net      — gRPC-сервисы общаются между собой
 #   data-net     — только "своим": БД, кэш, брокер недоступны из frontend/app
 # Сервис, подключённый к нескольким сетям, — маршрутизатор между сегментами.
@@ -114,6 +114,24 @@ services:
 
   # ==================== Сервисы приложения ====================
 
+  frontend:
+    build:
+      context: .
+      dockerfile: ./services/frontend/Dockerfile
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - frontend-net
+
   repair-service:
     build:
       context: .
@@ -169,8 +187,8 @@ services:
         condition: service_healthy
     environment:
       REPAIR_SERVICE_URL: repair-service:50054
-    ports:
-      - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]

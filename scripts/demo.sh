@@ -59,6 +59,20 @@ wait_api_gateway() {
     return 1
 }
 
+wait_frontend() {
+    attempt=1
+    while [ "$attempt" -le 60 ]; do
+        if compose exec -T frontend wget -q --spider http://127.0.0.1:8080/; then
+            return 0
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    compose logs frontend >&2 || true
+    echo "[FAIL] frontend не готов" >&2
+    return 1
+}
+
 echo "=== 1/7. Сборка и запуск ==="
 sync_existing_postgres_password
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
@@ -68,6 +82,7 @@ else
 fi
 wait_repair_service
 wait_api_gateway
+wait_frontend
 compose ps
 
 echo "=== 2/7. Продуктовый сценарий и SQL-схема ==="
@@ -86,6 +101,7 @@ echo "=== 6/7. Failover PostgreSQL и RabbitMQ ==="
 sh scripts/demo_ha.sh
 
 echo "=== 7/7. Итог ==="
+echo "[PASS] отдельный frontend доступен на http://127.0.0.1:8000/"
 echo "[PASS] REST API Gateway, gRPC и продуктовый CRUD"
 echo "[PASS] SQL-файл и применённая схема PostgreSQL"
 echo "[PASS] PostgreSQL, Redis и RabbitMQ"

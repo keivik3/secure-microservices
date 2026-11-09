@@ -5,8 +5,11 @@
 ## Архитектура
 
 ```
-Клиент (curl / REST)
-   │  HTTP/JSON :8000
+Браузер
+   │  HTTP :8000
+   ▼
+Frontend (Nginx) — интерфейс заявок
+   │  HTTP/JSON /api
    ▼
 API Gateway (FastAPI) — санитизация ввода (XSS/SQLi)
    │  gRPC + TLS :50051
@@ -43,6 +46,7 @@ reporter, crew (бригада), planned_date, created_at, updated_at, comment.
 
 ```
 proto/                  контракты gRPC (gateway, user, auth, repair)
+services/frontend/      веб-интерфейс и reverse proxy к API Gateway
 services/api_gateway/   REST → gRPC (FastAPI), санитизация ввода
 services/central_server/ агрегатор + rate limiter + метрики
 services/user_service/  пользователи
@@ -64,7 +68,9 @@ sh scripts/demo.sh podman
 Проверяются REST API Gateway, валидация ввода, CRUD, SQL-схема, Redis,
 RabbitMQ, сети, backup/restore и failover.
 
-После запуска <http://127.0.0.1:8000/> открывает Swagger UI.
+После запуска <http://127.0.0.1:8000/> открывает веб-интерфейс. В нём можно
+создать заявку, назначить бригаду, изменить статус, отфильтровать и удалить
+заявку. Swagger UI доступен по адресу <http://127.0.0.1:8000/docs>.
 Если порт `8000` занят, остановите стенд другого движка: `podman compose down` или
 `docker compose down`.
 
@@ -137,7 +143,7 @@ docker compose exec redis redis-cli GET ticket:1
 sh scripts/check_network.sh
 ```
 
-Ожидаемый результат — 10 passed, 0 failed: пять разрешённых и пять запрещённых соединений.
+Ожидаемый результат — 12 passed, 0 failed: шесть разрешённых и шесть запрещённых соединений.
 
 ## ДЗ 5 — важный нюанс с вашей ситуацией
 ```
