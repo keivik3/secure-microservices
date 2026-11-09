@@ -8,7 +8,7 @@
 # Проверка сегментации: scripts/check_network.sh
 
 x-postgres-ha: &postgres-ha
-  image: docker.io/library/postgres:16-alpine
+  image: docker.io/library/postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
   profiles: ["ha-demo"]
   tmpfs:
     - /var/lib/postgresql/data
@@ -22,7 +22,7 @@ x-postgres-ha: &postgres-ha
     - data-net
 
 x-rabbitmq-ha: &rabbitmq-ha
-  image: docker.io/library/rabbitmq:3-management-alpine
+  image: docker.io/library/rabbitmq:3-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
   profiles: ["ha-demo"]
   entrypoint: ["/bin/sh", "/rabbitmq-entrypoint.sh"]
   environment: &rabbitmq-ha-environment
@@ -44,7 +44,7 @@ services:
   # ==================== Инфраструктура ====================
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
     command: start-dev
     environment:
       KEYCLOAK_ADMIN: admin
@@ -56,7 +56,7 @@ services:
       - app-net
 
   postgres:
-    image: docker.io/library/postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     environment:
       POSTGRES_DB: rail_repair
       POSTGRES_USER: app
@@ -74,7 +74,7 @@ services:
       - data-net                       # ТОЛЬКО data-net: из app-net/frontend-net БД недоступна
 
   redis:
-    image: docker.io/library/redis:7-alpine
+    image: docker.io/library/redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -85,7 +85,7 @@ services:
       - data-net
 
   rabbitmq:
-    image: docker.io/library/rabbitmq:3-management-alpine
+    image: docker.io/library/rabbitmq:3-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
     environment:
       RABBITMQ_DEFAULT_USER: app
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
@@ -101,7 +101,7 @@ services:
       - data-net
 
   prometheus:
-    image: docker.io/prom/prometheus:latest
+    image: docker.io/prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -151,9 +151,17 @@ services:
       RABBITMQ_USER: app
       RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
       TLS_ENABLED: "false"  # локальный demo использует plaintext gRPC
-    ports:
-      - "127.0.0.1:50054:50054"
+      ENABLE_GRPC_REFLECTION: "true"
+    expose:
+      - "50054"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 50054), 2); s.close()"]
       interval: 2s
@@ -175,6 +183,13 @@ services:
       RABBITMQ_USER: app
       RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - data-net                       # нужен ТОЛЬКО брокер; в app-net его не пускаем
 
@@ -187,9 +202,17 @@ services:
         condition: service_healthy
     environment:
       REPAIR_SERVICE_URL: repair-service:50054
+      ENABLE_DOCS: "true"
     expose:
       - "8000"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
       interval: 2s

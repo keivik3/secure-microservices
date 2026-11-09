@@ -72,11 +72,11 @@ SKIP_BUILD=1 sh scripts/demo.sh docker
 SKIP_BUILD=1 sh scripts/demo.sh podman
 ```
 
-# Тестирование работы программы: 
+# Тестирование работы программы
 
 Ниже приведены команды Docker Compose; для Podman замените `docker` на `podman`.
 
-## 1. 
+## Запуск repair-service
 ```
 docker compose up --build -d repair-service
 ```
@@ -138,27 +138,25 @@ sh scripts/check_network.sh
 
 Ожидаемый результат — 12 passed, 0 failed: шесть разрешённых и шесть запрещённых соединений.
 
-## ДЗ 5 — важный нюанс с вашей ситуацией
+## ДЗ 5 — резервное копирование и восстановление
 ```
-# 0. Если таблица пуста — создайте заявку заново (команда из ДЗ 3):
+# Если таблица пуста, создайте заявку:
 docker run --rm --network secure-microservices_app-net fullstorydev/grpcurl \
   -plaintext -d '{"track_section":"Москва — Тверь, 167 км","defect_type":"RAIL","description":"Трещина в рельсе","priority":"CRITICAL","reporter":"inspector_ivan"}' \
   repair-service:50054 repair.RepairService/CreateTicket
 
-# 1. Бэкап (внутри свежей копии — заявка есть)
+# Бэкап
 sh scripts/backup.sh
 
-# 2. "Катастрофа"
+# Удаление данных для проверки восстановления
 docker compose exec postgres psql -U app rail_repair -c "TRUNCATE tickets RESTART IDENTITY;"
 docker compose exec postgres psql -U app rail_repair -c "SELECT * FROM tickets;"
-# (0 rows) — данных нет, "всё пропало"
 
-# 3. Восстановление — путь УКАЗЫВАЕМ СО СЛЭШЕМ, как вывел backup.sh:
+# Восстановление: укажите путь, который вывел backup.sh
 sh scripts/restore.sh backups/rail_repair_20261105_190338.sql.gz
 
-# 4. Проверка
+# Проверка
 docker compose exec postgres psql -U app rail_repair -c "SELECT id, track_section, status FROM tickets;"
-# заявка на месте
 ```
 
 Мы все сможем и сдадим на отлично !! <3

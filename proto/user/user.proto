@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package user;
 
-// Порт internal/user/proto/user.proto из Go-версии.
-// Исправлена опечатка оригинала: "returnsTokenResponse)" -> "returns (RefreshUserTokenResponse)".
-
 message User {
   int64 id = 1;
   string username = 2;

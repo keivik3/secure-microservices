@@ -1,14 +1,4 @@
-"""Издатель событий в RabbitMQ.
-
-Exchange: repair.events (тип topic, durable).
-Routing keys: repair.created, repair.assigned, repair.status_changed, repair.deleted.
-Консьюмер — notification-service.
-
-Соединение ленивое с переподключением: если брокер недоступен, запрос
-клиента НЕ падает — событие теряется, ошибка пишется в лог. Для учебного
-проекта это осознанный компромисс; в бою использовали бы outbox-паттерн
-(событие сначала пишется в БД, потом вычитывается ретраером).
-"""
+"""Издатель событий ремонта в RabbitMQ."""
 
 import json
 import logging

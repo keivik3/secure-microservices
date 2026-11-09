@@ -2,6 +2,7 @@
 
 import os
 import sys
+import logging
 
 import grpc
 from fastapi import FastAPI, HTTPException, Query
@@ -16,10 +17,17 @@ from proto.repair import repair_pb2 as pb
 from proto.repair import repair_pb2_grpc as pbg
 
 REPAIR_SERVICE_URL = os.getenv("REPAIR_SERVICE_URL", "repair-service:50054")
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false").lower() == "true"
 
 channel = grpc.insecure_channel(REPAIR_SERVICE_URL)
 client = pbg.RepairServiceStub(channel)
-app = FastAPI(title="Rail Repair API Gateway")
+logger = logging.getLogger("api.gateway")
+app = FastAPI(
+    title="Rail Repair API Gateway",
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
+)
 
 
 class TicketCreate(BaseModel):
@@ -42,7 +50,9 @@ class UpdateStatus(BaseModel):
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse("/docs")
+    if ENABLE_DOCS:
+        return RedirectResponse("/docs")
+    return {"status": "ok"}
 
 
 def validate_text(value: str, field: str) -> str:
@@ -68,8 +78,11 @@ def grpc_call(method, request):
             grpc.StatusCode.INVALID_ARGUMENT: 400,
             grpc.StatusCode.NOT_FOUND: 404,
             grpc.StatusCode.FAILED_PRECONDITION: 409,
-        }.get(error.code(), 503)
-        raise HTTPException(status, error.details() or "repair service unavailable") from error
+        }.get(error.code())
+        if status is not None:
+            raise HTTPException(status, error.details() or "request rejected") from error
+        logger.warning("repair RPC failed: code=%s details=%s", error.code(), error.details())
+        raise HTTPException(503, "repair service unavailable") from error
 
 
 def ticket_json(ticket) -> dict:
