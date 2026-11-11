@@ -150,7 +150,6 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: app
       RABBITMQ_PASS: ${RABBITMQ_PASSWORD:?Run sh scripts/init_env.sh}
-      TLS_ENABLED: "false"  # локальный demo использует plaintext gRPC
       ENABLE_GRPC_REFLECTION: "true"
     expose:
       - "50054"
