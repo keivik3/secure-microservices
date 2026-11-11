@@ -3,11 +3,13 @@
 import os
 import sys
 import logging
+import time
 
 import grpc
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from google.protobuf.json_format import MessageToDict
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +30,39 @@ app = FastAPI(
     redoc_url="/redoc" if ENABLE_DOCS else None,
     openapi_url="/openapi.json" if ENABLE_DOCS else None,
 )
+
+HTTP_REQUESTS = Counter(
+    "api_gateway_http_requests_total",
+    "HTTP requests handled by the API Gateway.",
+    ("method", "route", "status"),
+)
+HTTP_DURATION = Histogram(
+    "api_gateway_http_request_duration_seconds",
+    "HTTP request duration in seconds.",
+    ("method", "route"),
+)
+
+
+@app.middleware("http")
+async def observe_http(request, call_next):
+    if request.url.path == "/metrics":
+        return await call_next(request)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        route_name = getattr(route, "path", request.url.path)
+        HTTP_REQUESTS.labels(request.method, route_name, str(status)).inc()
+        HTTP_DURATION.labels(request.method, route_name).observe(time.perf_counter() - started)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 class TicketCreate(BaseModel):

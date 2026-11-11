@@ -44,7 +44,6 @@ services/frontend/      веб-интерфейс и reverse proxy к API Gatewa
 services/api_gateway/   REST → gRPC (FastAPI), валидация ввода
 services/repair_service/ заявки: Postgres + Redis + RabbitMQ
 services/notification_service/ консьюмер событий
-cert/                   генерация CA и mTLS-сертификатов для отдельного TLS-режима
 scripts/                генерация pb2-кода, тестовые запросы
 ```
 
