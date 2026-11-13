@@ -10,7 +10,6 @@ python -m grpc_tools.protoc \
   --grpc_python_out=./gen \
   proto/auth/auth.proto \
   proto/user/user.proto \
-  proto/repair/repair.proto \
-  proto/gateway/gateway.proto
+  proto/repair/repair.proto
 
 echo "OK: сгенерированный код в ./gen"
