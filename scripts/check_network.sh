@@ -7,8 +7,7 @@
 # а не через имя контейнера — тогда скрипт не зависит
 # от названия папки проекта (префикса контейнеров).
 #
-# Проверка использует утилиты, уже имеющиеся в контейнерах:
-#   python в сервисах приложения, nc во frontend, ping в Alpine-образах.
+# Проверка использует TCP-подключение: python в сервисах приложения или nc во frontend.
 
 set -e
 cd "$(dirname "$0")/.."
@@ -18,9 +17,14 @@ cd "$(dirname "$0")/.."
 pass=0; fail=0
 
 check() {  # $1=ожидание(ok/deny) $2=откуда(сервис) $3=куда $4=порт $5=пояснение
-    if compose exec -T "$2" sh -c \
-        "python -c \"import socket,sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 2)\" $3 $4 2>/dev/null || nc -z -w2 $3 $4 >/dev/null 2>&1 || ping -c1 -W2 $3 >/dev/null 2>&1" \
-        2>/dev/null
+    if compose exec -T "$2" sh -c '
+        host=$1
+        port=$2
+        if command -v python >/dev/null 2>&1; then
+            exec python -c "import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 2)" "$host" "$port"
+        fi
+        exec nc -z -w 2 "$host" "$port"
+    ' sh "$3" "$4" >/dev/null 2>&1
     then
         result="OK (доступен)"; actual=ok
     else
